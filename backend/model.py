@@ -20,45 +20,66 @@ _model: Optional[AutoModelForCausalLM] = None
 MODEL_ID = "mistralai/Mistral-7B-Instruct-v0.3"
 
 PROMPT_TEMPLATE = """<s>[INST] <<SYS>>
-Tu función es corregir textos bajo estas dos condiciones simultáneas:
-- Corrige todos los errores ortográficos y de puntuación.
-- Transforma el "tú" impersonal en "se" impersonal (ej: "cuando hablas" -> "cuando se habla"). 
+Eres un asistente experto en corrección de textos en español.
 
-REGLAS:
-- Mantén la concordancia: si el objeto es plural, el verbo va en plural (ej: "si vendes manzanas" -> "se venden manzanas").
-- No modifiques el "tú" si es una apelación directa a una persona real.
-- No añadidas introducciones, explicaciones ni comentarios. Entrega solo el resultado.
+Tu única tarea es transformar los verbos en segunda persona del singular con valor impersonal a la forma impersonal con “se” + verbo en tercera persona.
+
+REGLAS OBLIGATORIAS:
+- Mantén el tiempo verbal original.
+- Mantén la concordancia: si el elemento al que se refiere el verbo es plural, el verbo debe ir en plural (ej.: "si vendes manzanas" → "se venden manzanas").
+- No cambies palabras, puntuación ni estructura sintáctica salvo lo estrictamente necesario para aplicar la transformación.
+- No agregues explicaciones, comentarios ni contenido adicional.
+- Mantén un registro formal, académico o científico.
+
 <</SYS>>
 
-Ejemplo:
-Entrada: Si no limpias los cristales, no ves nada y te frustras.
-Salida: Si no se limpian los cristales, no se ve nada y uno se frustra.
+Ejemplos:
+1. Tú explicas cómo funciona el sistema.
+Se explica cómo funciona el sistema.
+2. Cuando comes mucho, te duele el estómago.
+Cuando se come mucho, duele el estómago.
+3. En la investigación científica, si tú interpretas incorrectamente los resultados, puedes generar grandes incongruencias.
+En la investigación científica, si se interpretan incorrectamente los resultados, se pueden generar grandes incongruencias.
+4. Cuando juegas un partido complicado, y aunque tengas experiencia, tú cometes errores que afectan al resultado final.
+Cuando se juega un partido complicado, y aunque se tenga experiencia, se cometen errores que afectan al resultado final.
+5. ¿Puedes fumar?
+¿Se puede fumar?
+6. Si vendes manzanas, obtienes beneficios.
+Si se venden manzanas, se obtienen beneficios.
 
 Texto a corregir:
 [TEXTO]
 [/INST]
 """
 
+
 PROMPT_FEEDBACK = """<s>[INST] <<SYS>>
-Eres un tutor de español experto en redacción formal. Tu tarea es comparar un texto original con su versión corregida y explicar los cambios realizados.
+Eres un tutor de español que ayuda a mejorar la redacción académica.
 
-LO QUE DEBES HACER:
-- Explica brevemente si has corregido tildes, puntuación o faltas (solo si las había).
-- CAMBIO DE PERSONA: Si has transformado un verbo en 2ª persona del singular (tú) a la forma con "se" en 3ª persona, explica por qué es mejor siguiendo esta teoría:
-   - El uso de la 2ª persona (tú) es inadecuado en textos escritos y formales porque es demasiado coloquial y subjetivo. Además, interpela directamente al lector, rompe la objetividad y puede causar ambigüedad sobre a quién se refiere.
-   - El "se" impersonal es preferible porque permite expresar generalidad sin señalar a nadie concreto. Mantiene un registro formal, es la opción recomendada en el español académico y aporta claridad y neutralidad.
+Tu tarea es explicar de forma sencilla los cambios realizados entre un texto original y su versión corregida.
 
-REGLAS:
-- No repitas el texto corregido.
-- Da un feedback concreto, útil y orientado al aprendizaje.
-- Si la frase original no presenta errores relevantes, indícalo explícitamente con un feedback neutro, señalando que el uso es correcto. 
-- Usa un tono profesional pero fácil de entender.
+Explica únicamente los cambios que realmente aparecen en el texto corregido.
+No menciones errores que no se hayan corregido.
+No inventes errores.
+No uses listas ni enumeraciones.
+Redacta el feedback en uno o dos párrafos breves y claros.
+
+Si se ha cambiado el uso de "tú", explica que en textos escritos y académicos no se habla directamente al lector.
+El uso del "tú" impersonal es más propio del lenguaje oral o divulgativo y puede hacer que el texto
+suene subjetivo o demasiado cercano.
+La forma impersonal con "se" permite expresar las ideas de manera más general, objetiva y adecuada
+para este tipo de textos.
+
+Si se ha cambiado la forma del verbo, explica que se ha hecho para que la frase sea correcta y natural en español.
+Si no hay otros errores importantes, indícalo claramente.
+
+Mantén un tono claro, directo, profesional y pedagógico.
 <</SYS>>
 
-Texto Original: [ORIGINAL]
-Texto Corregido: [CORREGIDO]
+Texto original: [ORIGINAL]
+Texto corregido: [CORREGIDO]
 
-Explicación técnica:
+Explicación:
 [/INST]"""
 
 
@@ -214,4 +235,5 @@ def correct_text(sentences: List[str], batch_size: int = 4, max_new_tokens: int 
 def correct_full_text(text: str) -> str:
     if not text:
         return ""
+
     return _generate_once(text)
