@@ -2,7 +2,7 @@
 
 ## **Aprendizaje y mejora de la escritura académica con ayuda de IA**
 
-APP-PALABRIA es una aplicación educativa diseñada para *ayudar a estudiantes a mejorar su escritura en español, especialmente en contextos académicos, científicos y formales.
+APP-PALABRIA es una aplicación educativa diseñada para ayudar a estudiantes a mejorar su escritura en español, especialmente en contextos académicos, científicos y formales.
 
 La aplicación no se limita a corregir errores, sino que está pensada como una herramienta de aprendizaje, que combina:
 - Corrección automática de textos.
@@ -13,22 +13,23 @@ La aplicación no se limita a corregir errores, sino que está pensada como una 
 
 ## **¿Qué permite hacer la aplicación?**
 
-Con APP-PALABRIA, el estudiante puede:
+Con la aplicación de PALABRIA, el estudiante puede:
 
 - Subir documentos PDF o introducir texto plano.
 - Obtener una versión corregida del texto.
 - Recibir feedback explicativo sobre los cambios realizados, orientado a entender:
-  - por qué una forma es inadecuada en textos académicos,
-  - cómo reformularla de manera más correcta y formal.
+  - por qué es incorrecto o inadecuado,
+  - cómo reformular el texto de manera más correcta y formal.
 - Analizar sus propios textos a través de métricas automáticas.
 - Consultar indicadores generales sobre su uso de la aplicación.
 
 Actualmente, la aplicación se centra principalmente en la detección y corrección del uso impersonal del “tú” en textos escritos.
+
 ---
 
 ## **Ejecución de la aplicación**
 
-La aplicación se ejecuta mediante Google Colab, utilizando un notebook que guía todo el proceso.
+La aplicación se puede ejecutar mediante Google Colab utilizando el notebook disponible.
 
 📓 **Notebook principal**:  
 `APP_PALABRIA.ipynb`
@@ -46,7 +47,7 @@ Se recomienda seguir las celdas en el orden indicado.
 
 ## **Funcionamiento general**
 
-APP-PALABRIA combina dos componentes principales:
+La app de PALABRIA combina dos componentes principales:
 
 - **Backend**  
   Se encarga de:
@@ -60,8 +61,6 @@ APP-PALABRIA combina dos componentes principales:
   - Subir PDFs o introducir texto manualmente.
   - Visualizar el texto corregido.
   - Consultar el feedback y los indicadores generados.
-
-Ambos componentes se comunican de forma local dentro del entorno de ejecución.
 
 ---
 
@@ -93,9 +92,10 @@ Estas métricas están pensadas para que el estudiante pueda reflexionar sobre s
 
 ## **Base de datos y privacidad**
 
-- Cada ejecución crea una base de datos local (SQLite).
+- Cada ejecución crea una base de datos (SQLite) asociada al usuario.
+- La base de datos se guarda en el Google Drive del propio usuario.
 - La base de datos es personal para cada usuario.
-- Los datos no se suben a GitHub ni se comparten.
+- Los datos no se suben a GitHub ni se comparten con terceros.
 
 Esto garantiza la privacidad y el uso individual de la aplicación.
 
