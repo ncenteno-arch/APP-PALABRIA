@@ -9,7 +9,6 @@ La aplicación no se limita a corregir errores, sino que está pensada como una 
 - Feedback explicativo y pedagógico.
 - Métricas que permiten analizar los errores y la evolución del usuario.
 
----
 
 ## **¿Qué permite hacer la aplicación?**
 
@@ -25,7 +24,6 @@ Con la aplicación de PALABRIA, el estudiante puede:
 
 Actualmente, la aplicación se centra principalmente en la detección y corrección del uso impersonal del “tú” en textos escritos.
 
----
 
 ## **Ejecución de la aplicación**
 
@@ -43,7 +41,6 @@ En este notebook se explican paso a paso las acciones necesarias para:
 
 Se recomienda seguir las celdas en el orden indicado.
 
----
 
 ## **Funcionamiento general**
 
@@ -62,7 +59,6 @@ La app de PALABRIA combina dos componentes principales:
   - Visualizar el texto corregido.
   - Consultar el feedback y los indicadores generados.
 
----
 
 ## **Feedback pedagógico**
 
@@ -76,7 +72,6 @@ Por ello, la aplicación no solo devuelve un texto corregido, sino que genera un
 
 El feedback está diseñado con un enfoque pedagógico y reflexivo, de manera que la corrección no sea solo un resultado final, sino un apoyo para el aprendizaje lingüístico.
 
----
 
 ## **Métricas e indicadores**
 
@@ -88,7 +83,6 @@ La aplicación genera distintos tipos de métricas con fines educativos y de an�
 
 Estas métricas están pensadas para que el estudiante pueda reflexionar sobre su escritura, detectar patrones de error y observar su progreso.
 
----
 
 ## **Base de datos y privacidad**
 
@@ -99,7 +93,6 @@ Estas métricas están pensadas para que el estudiante pueda reflexionar sobre s
 
 Esto garantiza la privacidad y el uso individual de la aplicación.
 
----
 
 ## **Ejemplo**
 
@@ -112,7 +105,6 @@ Esto garantiza la privacidad y el uso individual de la aplicación.
 **Feedback generado:**  
 *La frase original utiliza la segunda persona del singular con valor impersonal, un recurso más propio del lenguaje oral o divulgativo. En textos académicos se recomienda emplear construcciones impersonales con “se”, ya que permiten expresar generalidad sin dirigirse directamente al lector y contribuyen a un estilo más objetivo y adecuado al registro formal.*
 
----
 
 ## **Acknowledgements**
 
