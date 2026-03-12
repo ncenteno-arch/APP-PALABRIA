@@ -316,9 +316,6 @@ def inject_session_js(backend_url: str, username: str):
       }}
 
       window.addEventListener("beforeunload", beaconLogout);
-      document.addEventListener("visibilitychange", function(){{
-        if (document.visibilityState === "hidden") beaconLogout();
-      }});
     }})();
     </script>
     """
