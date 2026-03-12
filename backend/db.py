@@ -136,9 +136,10 @@ def close_open_session(user_id: int, now_epoch: float, idle_grace: float = 1800.
         last_login_id = int(row_login["id"])
         start_ts = float(row_login["value"] or 0.0)
 
+        # Si ya existe session_duration para esta sesión, no crear otra
         row_sd = con.execute("""
             SELECT id FROM usage_stats
-            WHERE user_id=? AND event='session_duration' AND id>? 
+            WHERE user_id=? AND event='session_duration' AND id>?
             ORDER BY id DESC LIMIT 1
         """, (user_id, last_login_id)).fetchone()
         if row_sd:
@@ -151,17 +152,67 @@ def close_open_session(user_id: int, now_epoch: float, idle_grace: float = 1800.
         """, (user_id, last_login_id)).fetchone()
         hb_ts = float(row_hb["value"]) if row_hb and row_hb["value"] is not None else None
 
-        end_ts = float(now_epoch)
-        if hb_ts is not None and (end_ts - hb_ts) <= idle_grace + 5:
-            end_ts = hb_ts
+        end_ts = now_epoch
+        if hb_ts is not None:
+            if (now_epoch - hb_ts) > idle_grace:
+                end_ts = hb_ts  
+            else:
+                end_ts = now_epoch
 
         dur = max(0.0, end_ts - start_ts)
-        dur = min(max(dur, 10.0), 12 * 3600.0)
+        dur = min(dur, 12 * 3600.0)  
 
         con.execute("INSERT INTO usage_stats(user_id, event, value) VALUES(?,?,?)",
                     (user_id, "session_duration", float(dur)))
         con.execute("INSERT INTO usage_stats(user_id, event, value) VALUES(?,?,NULL)",
                     (user_id, "logout"))
+
+def close_idle_sessions(idle_secs: float = 1800.0):
+    """
+    Cierra todas las sesiones abiertas cuyo último heartbeat fue hace
+    más de idle_secs segundos. Llamar al inicio de cada login.
+    """
+    import time
+    now = time.time()
+    with db() as con:
+        open_sessions = con.execute("""
+            SELECT us.user_id, us.id AS login_id, us.value AS start_ts
+            FROM usage_stats us
+            WHERE us.event = 'login_ts'
+              AND NOT EXISTS (
+                SELECT 1 FROM usage_stats sd
+                WHERE sd.user_id = us.user_id
+                  AND sd.event = 'session_duration'
+                  AND sd.id > us.id
+              )
+        """).fetchall()
+
+        for row in open_sessions:
+            uid = row["user_id"]
+            login_id = row["login_id"]
+            start_ts = float(row["start_ts"] or 0)
+
+            hb = con.execute("""
+                SELECT value FROM usage_stats
+                WHERE user_id=? AND event='heartbeat' AND id >= ?
+                ORDER BY id DESC LIMIT 1
+            """, (uid, login_id)).fetchone()
+
+            hb_ts = float(hb["value"]) if hb and hb["value"] else None
+
+            if hb_ts is None:
+                continue  
+
+            if (now - hb_ts) > idle_secs:
+                dur = max(0.0, min(hb_ts - start_ts, 12 * 3600.0))
+                con.execute(
+                    "INSERT INTO usage_stats(user_id, event, value) VALUES(?,?,?)",
+                    (uid, "session_duration", dur)
+                )
+                con.execute(
+                    "INSERT INTO usage_stats(user_id, event, value) VALUES(?,?,NULL)",
+                    (uid, "logout")
+                )
 
 def create_document(user_id: int, filename: str | None, text_hash: str | None) -> int:
     with db() as con:
