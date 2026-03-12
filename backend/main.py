@@ -12,7 +12,7 @@ from backend.db import (
     record_usage, create_document, insert_metric,
     get_user_overview, get_user_documents, get_document_metrics,
     sanitize_username, delete_document, record_login_ts,
-    close_open_session, get_user_weekly_activity
+    close_open_session, close_idle_sessions, get_user_weekly_activity
 )
 
 app = FastAPI(title="PALABRIA Backend")
@@ -49,6 +49,7 @@ def user_create(username: str = Form(...)):
             raise HTTPException(status_code=409, detail="El usuario ya existe. Elige otro nombre.")
         uid = create_user(username)
         record_usage(uid, "login", None)
+        close_idle_sessions(idle_secs=3600)
         record_login_ts(uid, time.time())
         return {"ok": True, "user_id": uid, "username": username}
     except HTTPException:
@@ -64,6 +65,7 @@ def user_login(username: str = Form(...)):
         if uid is None:
             raise HTTPException(status_code=404, detail="La cuenta no existe. Crea una nueva.")
         record_usage(uid, "login", None)
+        close_idle_sessions(idle_secs=3600)
         record_login_ts(uid, time.time())
         return {"ok": True, "user_id": uid, "username": username}
     except HTTPException:
@@ -85,6 +87,7 @@ def user_logout(username: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# cmbio:
 @app.post("/users/heartbeat")
 def user_heartbeat(username: str = Form(...)):
     try:
@@ -94,7 +97,6 @@ def user_heartbeat(username: str = Form(...)):
             raise HTTPException(status_code=404, detail="Usuario no válido.")
         now = time.time()
         record_usage(uid, "heartbeat", now)
-        close_open_session(uid, now_epoch=now, idle_secs=1800)
         return {"ok": True}
     except HTTPException:
         raise
