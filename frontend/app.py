@@ -444,7 +444,7 @@ details[data-testid="stExpander"] > div {
   border-top: 1px solid var(--border) !important;
 }
 
-/* ── Read-only boxes ── */
+/* ── Read-only boxes (HTML) ── */
 .readonly-box {
   width: 100% !important;
   box-sizing: border-box !important;
@@ -463,6 +463,23 @@ details[data-testid="stExpander"] > div {
   overflow-x: hidden !important;
   resize: none !important;
   white-space: pre-wrap !important;
+}
+
+/* ── Textareas disabled (Texto original, Salida modelo, Feedback) ── */
+div[data-testid="stTextArea"]:has(textarea:disabled) textarea {
+  background: #f8fafc !important;
+  border: 1.5px solid var(--border) !important;
+  color: var(--text-soft) !important;
+  -webkit-text-fill-color: var(--text-soft) !important;
+  cursor: default !important;
+  opacity: 1 !important;
+  resize: vertical !important;
+  line-height: 1.65 !important;
+}
+div[data-testid="stTextArea"]:has(textarea:disabled) textarea:focus {
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* ── Metric table rows ── */
@@ -736,7 +753,7 @@ div[data-testid="stForm"] {
 </style>
 """, unsafe_allow_html=True)
     with st.form("create_account_form"):
-        section("🔏", "Crear nueva cuenta")
+        section("📝", "Crear nueva cuenta")
         new_username = st.text_input("Elige un nombre de usuario (letras/números/_-. máx 32)")
         submit = st.form_submit_button("Crear cuenta", use_container_width=True)
         if submit:
@@ -976,7 +993,7 @@ def main_app():
             st.session_state["show_login"] = True
             st.session_state["show_create_account"] = False
             st.rerun()
-        if st.sidebar.button("🔏 Crear cuenta", use_container_width=True):
+        if st.sidebar.button("📝 Crear cuenta", use_container_width=True):
             st.session_state["show_create_account"] = True
             st.session_state["show_login"] = False
             st.rerun()
@@ -1186,24 +1203,36 @@ def main_app():
                 col4.metric("Cambios realizados (usuario)", cambios_usuario_total)
 
             rule()
+            _doc_v = st.session_state.get("last_doc_id", "0")
             section("▸", "Texto original")
-            original_text_display = anal.get("original_text", "")
-            st.markdown(
-                f"""<textarea class="readonly-box" readonly style="white-space: pre-wrap; line-height: 1.5;">{original_text_display.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")}</textarea>""",
-                unsafe_allow_html=True
+            st.text_area(
+                label="texto_original_label",
+                value=anal.get("original_text", ""),
+                height=200,
+                disabled=True,
+                label_visibility="collapsed",
+                key=f"__readonly_original_v{_doc_v}",
             )
 
             section("◎", "Salida del modelo")
-            st.markdown(
-                f"""<textarea class="readonly-box" readonly>{(corrected_text or "").replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")}</textarea>""",
-                unsafe_allow_html=True
+            st.text_area(
+                label="salida_modelo_label",
+                value=corrected_text or "",
+                height=200,
+                disabled=True,
+                label_visibility="collapsed",
+                key=f"__readonly_corrected_v{_doc_v}",
             )
 
             section("✦", "Feedback del modelo")
             feedback_text = anal.get("feedback", "")
-            st.markdown(
-                f"""<textarea class="readonly-box" readonly style="white-space: pre-wrap; line-height: 1.5;">{feedback_text.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")}</textarea>""",
-                unsafe_allow_html=True
+            st.text_area(
+                label="feedback_modelo_label",
+                value=feedback_text or "",
+                height=200,
+                disabled=True,
+                label_visibility="collapsed",
+                key=f"__readonly_feedback_v{_doc_v}",
             )
 
             rule()
