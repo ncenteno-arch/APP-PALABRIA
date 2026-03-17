@@ -736,7 +736,7 @@ div[data-testid="stForm"] {
 </style>
 """, unsafe_allow_html=True)
     with st.form("create_account_form"):
-        section("📝", "Crear nueva cuenta")
+        section("🔏", "Crear nueva cuenta")
         new_username = st.text_input("Elige un nombre de usuario (letras/números/_-. máx 32)")
         submit = st.form_submit_button("Crear cuenta", use_container_width=True)
         if submit:
@@ -976,7 +976,7 @@ def main_app():
             st.session_state["show_login"] = True
             st.session_state["show_create_account"] = False
             st.rerun()
-        if st.sidebar.button("📝 Crear cuenta", use_container_width=True):
+        if st.sidebar.button("🔏 Crear cuenta", use_container_width=True):
             st.session_state["show_create_account"] = True
             st.session_state["show_login"] = False
             st.rerun()
