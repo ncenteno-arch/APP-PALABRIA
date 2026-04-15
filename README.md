@@ -72,6 +72,15 @@ Por ello, la aplicación no solo devuelve un texto corregido, sino que genera un
 
 El feedback está diseñado con un enfoque pedagógico y reflexivo, de manera que la corrección no sea solo un resultado final, sino un apoyo para el aprendizaje lingüístico.
 
+Además del feedback asociado a cada texto, la aplicación genera un feedback general a partir de las métricas globales del usuario, construido mediante el análisis agregado de su actividad.
+
+Este feedback ofrece una visión sintética e interpretativa del uso de la herramienta, incluyendo:
+- Una caracterización del comportamiento global (frecuencia de uso, número de textos analizados, etc.).
+- La identificación de patrones recurrentes de error (persistencia del “tú” impersonal).
+- Una valoración de la evolución del usuario a lo largo del tiempo.
+
+A partir de estos elementos, el sistema proporciona recomendaciones orientadas a la mejora, permitiendo al estudiante comprender su progreso, detectar tendencias en su escritura y orientar su aprendizaje de forma más autónoma.
+
 
 ## **Métricas e indicadores**
 
