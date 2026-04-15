@@ -534,11 +534,23 @@ def rule():
     st.markdown("<hr class='palabria-rule'>", unsafe_allow_html=True)
 
 def save_text_as_pdf(text, filename="Texto_Corregido.pdf"):
+    # Normalizar caracteres que latin-1 no soporta
+    replacements = {
+        "\u201c": '"', "\u201d": '"',   # comillas tipográficas
+        "\u2018": "'", "\u2019": "'",   # comillas simples tipográficas
+        "\u2014": "-", "\u2013": "-",   # guiones largos
+        "\u2026": "...",                # puntos suspensivos
+        "\u00a0": " ",                  # espacio no separable
+    }
+    clean = text
+    for orig, repl in replacements.items():
+        clean = clean.replace(orig, repl)
+
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    for line in text.split("\n"):
+    for line in clean.split("\n"):
         pdf.multi_cell(0, 10, line)
     pdf.output(filename)
     return filename
@@ -886,6 +898,90 @@ def ver_mis_metricas(username, backend_url):
         except Exception as e:
             st.warning(f"Error al obtener la actividad: {e}")
 
+        # ── Valoración global IA ───────────────────────────────────────────
+        rule()
+        section("◉", "Valoración global")
+
+        total_docs_ov = int(ov.get("docs", 0)) if ov else 0
+        if total_docs_ov == 0:
+            st.info("Sube al menos un documento para recibir una valoración global de tu progreso.")
+        elif not st.session_state.get("modelo_listo", False):
+            st.info("El modelo de IA debe estar cargado para generar la valoración global.")
+        else:
+            cache_key_gf      = f"__cache_global_feedback_{username}"
+            cache_key_gf_pend = f"__cache_global_feedback_pending_{username}"
+
+            if st.button("✦ Generar valoración global", key="btn_global_feedback",
+                         use_container_width=True):
+                st.session_state.pop(cache_key_gf, None)
+                st.session_state[cache_key_gf_pend] = True
+                st.rerun()
+
+            if st.session_state.get(cache_key_gf_pend) and cache_key_gf not in st.session_state:
+                st.markdown(
+                    "<div style='text-align:center; padding:1.2rem 0; "
+                    "font-family:Nunito,sans-serif; font-weight:600; font-size:0.95rem; "
+                    "color:var(--blue);'>⏳ Generando valoración…</div>",
+                    unsafe_allow_html=True
+                )
+                try:
+                    r = requests.get(
+                        f"{backend_url}/users/{username}/global_feedback",
+                        timeout=600,
+                    )
+                    if r.ok:
+                        st.session_state[cache_key_gf] = r.json()
+                    else:
+                        st.warning("No se pudo obtener la valoración global.")
+                except Exception as e:
+                    st.warning(f"Error al obtener la valoración: {e}")
+                finally:
+                    st.session_state.pop(cache_key_gf_pend, None)
+                st.rerun()
+
+            if cache_key_gf in st.session_state:
+                data_gf      = st.session_state[cache_key_gf]
+                feedback_txt = data_gf.get("feedback", "")
+                stats_gf     = data_gf.get("stats", {})
+
+                if feedback_txt:
+                    evolucion_labels = {
+                        "mejora":       ("↗ Mejora",              "#16a34a"),
+                        "empeora":      ("↘ Tendencia negativa",  "#dc2626"),
+                        "estable":      ("→ Estable",             "#d97706"),
+                        "insuficiente": ("· Pocos datos",         "#8aa0b8"),
+                    }
+                    ev_key   = stats_gf.get("evolucion", "insuficiente")
+                    ev_label, ev_color = evolucion_labels.get(ev_key, ("·", "#8aa0b8"))
+
+                    st.markdown(
+                        f"""
+<div style="
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--blue);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.3rem;
+    margin-bottom: 0.8rem;
+    box-shadow: var(--shadow-sm);
+">
+  <div style="font-size:0.67rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+              color:var(--text-muted);margin-bottom:0.55rem;">Valoración del tutor IA</div>
+  <p style="font-size:0.97rem;font-weight:500;line-height:1.65;color:var(--text);margin:0 0 0.85rem 0;">
+    {feedback_txt}
+  </p>
+  <div style="display:flex;gap:1.2rem;flex-wrap:wrap;font-size:0.8rem;font-weight:600;
+              color:var(--text-soft);border-top:1px solid var(--border);padding-top:0.6rem;">
+    <span>📄 {stats_gf.get('total_docs',0)} documentos</span>
+    <span>📅 {stats_gf.get('login_days',0)} días de uso</span>
+    <span>⚠ {stats_gf.get('pct_con_error',0):.0f}% con 'tú' impersonal</span>
+    <span style="color:{ev_color}">{ev_label}</span>
+  </div>
+</div>
+""",
+                        unsafe_allow_html=True,
+                    )
+
     rule()
     section("☰", "Mis documentos")
     if docs:
@@ -1105,7 +1201,7 @@ def main_app():
             with st.spinner("Analizando el PDF..."):
                 files = {'file': (uploaded_file.name, file_bytes, "application/pdf")}
                 data = {'username': st.session_state["usuario"]}
-                response = requests.post(f"{backend_url}/process/", files=files, data=data, timeout=120)
+                response = requests.post(f"{backend_url}/process/", files=files, data=data, timeout=600)
 
             if response.status_code == 200:
                 data = response.json()
@@ -1151,7 +1247,7 @@ def main_app():
                             'text': texto_plano,
                             'filename': nombre_doc_norm,
                         }
-                        response = requests.post(f"{backend_url}/process_text/", data=data, timeout=120)
+                        response = requests.post(f"{backend_url}/process_text/", data=data, timeout=600)
 
                     if response.status_code == 200:
                         resp = response.json()
@@ -1226,6 +1322,33 @@ def main_app():
 
             section("✦", "Feedback del modelo")
             feedback_text = anal.get("feedback", "")
+
+            # ── Polling de feedback asíncrono ─────────────────────────────
+            if not feedback_text and _doc_v:
+                fb_cache_key = f"__feedback_done_{_doc_v}"
+                if fb_cache_key not in st.session_state:
+                    try:
+                        fb_resp = requests.get(
+                            f"{backend_url}/feedback_status/{_doc_v}", timeout=5
+                        )
+                        if fb_resp.ok:
+                            fb_data = fb_resp.json()
+                            if fb_data.get("status") == "done":
+                                feedback_text = fb_data.get("result", "")
+                                # Guardar en last_analysis y marcar como listo
+                                st.session_state["last_analysis"]["feedback"] = feedback_text
+                                st.session_state[fb_cache_key] = True
+                            elif fb_data.get("status") == "error":
+                                feedback_text = "No se pudo generar el feedback. Inténtalo de nuevo."
+                                st.session_state[fb_cache_key] = True
+                            else:
+                                # Aún pending → mostrar spinner y rerun en 4s
+                                with st.spinner("Generando feedback pedagógico…"):
+                                    time.sleep(4)
+                                st.rerun()
+                    except Exception:
+                        pass  # si el backend no responde, simplemente no mostrar nada aún
+
             st.text_area(
                 label="feedback_modelo_label",
                 value=feedback_text or "",
