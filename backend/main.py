@@ -28,18 +28,23 @@ app.add_middleware(
 init_db()
 
 
+# ── Estado ─────────────────────────────────────────────────────────────────────
+
 @app.get("/status/")
 def check_status():
     return {
         "modelo_listo": model.MODEL_LOADED,
-        "progress": model.LOAD_PROGRESS,
-        "message": model.LOAD_MESSAGE,
+        "progress":     model.LOAD_PROGRESS,
+        "message":      model.LOAD_MESSAGE,
     }
 
 @app.post("/load/")
 def trigger_load():
     model.ensure_model_loaded(async_load=True)
     return {"ok": True}
+
+
+# ── Usuarios ───────────────────────────────────────────────────────────────────
 
 @app.post("/users/create")
 def user_create(username: str = Form(...)):
@@ -87,7 +92,6 @@ def user_logout(username: str = Form(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# cmbio:
 @app.post("/users/heartbeat")
 def user_heartbeat(username: str = Form(...)):
     try:
@@ -95,13 +99,15 @@ def user_heartbeat(username: str = Form(...)):
         uid = get_user_id(username)
         if uid is None:
             raise HTTPException(status_code=404, detail="Usuario no válido.")
-        now = time.time()
-        record_usage(uid, "heartbeat", now)
+        record_usage(uid, "heartbeat", time.time())
         return {"ok": True}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Procesamiento de documentos ────────────────────────────────────────────────
 
 @app.post("/process/")
 async def process_pdf(
@@ -113,36 +119,43 @@ async def process_pdf(
     if uid is None:
         raise HTTPException(status_code=403, detail="Usuario no válido. Inicia sesión con una cuenta existente.")
 
-    content = await file.read()
+    content       = await file.read()
     original_text = extract_text_from_pdf(content)
 
-    errores_posibles, _ = posible_tu_impersonal(original_text)
-    if not isinstance(errores_posibles, list):
-        errores_posibles = []
+    # Corrección y detección spaCy en paralelo (spaCy es CPU, modelo es GPU)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_correct = ex.submit(model.correct_full_text, original_text)
+        fut_errores = ex.submit(posible_tu_impersonal, original_text)
+        corrected_text = fut_correct.result()
+        errores_result = fut_errores.result()
 
-    corrected_text = model.correct_full_text(original_text)
-    feedback = model.generate_feedback(original_text, corrected_text)
+    errores_posibles = errores_result[0] if isinstance(errores_result[0], list) else []
 
-    sentences = split_into_sentences(original_text)
-    total_frases = len(sentences)
-    total_errores = len(errores_posibles)
-    cambios_modelo_total = word_levenshtein_count(original_text, corrected_text)
+    sentences      = split_into_sentences(original_text)
+    total_frases   = len(sentences)
+    total_errores  = len(errores_posibles)
+    cambios_modelo = word_levenshtein_count(original_text, corrected_text)
 
+    # Feedback y escritura en DB en paralelo
+    from concurrent.futures import ThreadPoolExecutor as TPE
     text_hash = hashlib.sha256((original_text or "").encode("utf-8")).hexdigest()
-    doc_id = create_document(uid, file.filename, text_hash)
+    doc_id    = create_document(uid, file.filename, text_hash)
 
-    insert_metric(doc_id, "total_frases", float(total_frases))
-    insert_metric(doc_id, "frases_con_tu_impersonal", float(total_errores))
-    insert_metric(doc_id, "cambios_propuestos_modelo", float(cambios_modelo_total))
-    insert_metric(doc_id, "cambios_realizados_usuario", float(cambios_modelo_total))
-
+    insert_metric(doc_id, "total_frases",              float(total_frases))
+    insert_metric(doc_id, "frases_con_tu_impersonal",  float(total_errores))
+    insert_metric(doc_id, "cambios_propuestos_modelo", float(cambios_modelo))
+    insert_metric(doc_id, "cambios_realizados_usuario", float(cambios_modelo))
     record_usage(uid, "pdf_uploaded", None)
 
+    # Lanzar feedback en background — la respuesta se devuelve sin esperar
+    model.schedule_feedback(doc_id, original_text, corrected_text, n_errores=total_errores)
+
     return {
-        "doc_id": doc_id,
+        "doc_id":        doc_id,
         "original_text": original_text,
-        "corrected": corrected_text,
-        "feedback": feedback,
+        "corrected":     corrected_text,
+        "feedback":      "",  # generándose en background — consultar /feedback_status/{doc_id}
         "errores_posibles": errores_posibles,
         "mensaje_errores": (
             "No se detectaron errores de 'tú' impersonal."
@@ -150,17 +163,17 @@ async def process_pdf(
             else f"Se detectaron {len(errores_posibles)} posibles usos del 'tú' impersonal."
         ),
         "metricas": {
-            "total_frases": total_frases,
-            "frases_con_tu_impersonal": total_errores,
-            "cambios_propuestos_modelo": cambios_modelo_total,
-            "cambios_realizados_usuario": cambios_modelo_total,
+            "total_frases":               total_frases,
+            "frases_con_tu_impersonal":   total_errores,
+            "cambios_propuestos_modelo":  cambios_modelo,
+            "cambios_realizados_usuario": cambios_modelo,
         },
     }
 
 @app.post("/process_text/")
 async def process_text(
     username: str = Form(...),
-    text: str = Form(...),
+    text:     str = Form(...),
     filename: str = Form(None),
 ):
     username = sanitize_username(username)
@@ -170,33 +183,38 @@ async def process_text(
 
     original_text = text or ""
 
-    errores_posibles, _ = posible_tu_impersonal(original_text)
-    if not isinstance(errores_posibles, list):
-        errores_posibles = []
+    # Corrección y detección spaCy en paralelo
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fut_correct = ex.submit(model.correct_full_text, original_text)
+        fut_errores = ex.submit(posible_tu_impersonal, original_text)
+        corrected_text = fut_correct.result()
+        errores_result = fut_errores.result()
 
-    corrected_text = model.correct_full_text(original_text)
-    feedback = model.generate_feedback(original_text, corrected_text)
+    errores_posibles = errores_result[0] if isinstance(errores_result[0], list) else []
 
-    sentences = split_into_sentences(original_text)
-    total_frases = len(sentences)
-    total_errores = len(errores_posibles)
-    cambios_modelo_total = word_levenshtein_count(original_text, corrected_text)
+    sentences      = split_into_sentences(original_text)
+    total_frases   = len(sentences)
+    total_errores  = len(errores_posibles)
+    cambios_modelo = word_levenshtein_count(original_text, corrected_text)
 
     text_hash = hashlib.sha256((original_text or "").encode("utf-8")).hexdigest()
-    doc_id = create_document(uid, filename or "entrada_texto.txt", text_hash)
+    doc_id    = create_document(uid, filename or "entrada_texto.txt", text_hash)
 
-    insert_metric(doc_id, "total_frases", float(total_frases))
-    insert_metric(doc_id, "frases_con_tu_impersonal", float(total_errores))
-    insert_metric(doc_id, "cambios_propuestos_modelo", float(cambios_modelo_total))
-    insert_metric(doc_id, "cambios_realizados_usuario", float(cambios_modelo_total))
-
+    insert_metric(doc_id, "total_frases",              float(total_frases))
+    insert_metric(doc_id, "frases_con_tu_impersonal",  float(total_errores))
+    insert_metric(doc_id, "cambios_propuestos_modelo", float(cambios_modelo))
+    insert_metric(doc_id, "cambios_realizados_usuario", float(cambios_modelo))
     record_usage(uid, "text_uploaded", None)
 
+    # Lanzar feedback en background — la respuesta se devuelve sin esperar
+    model.schedule_feedback(doc_id, original_text, corrected_text, n_errores=total_errores)
+
     return {
-        "doc_id": doc_id,
+        "doc_id":        doc_id,
         "original_text": original_text,
-        "corrected": corrected_text,
-        "feedback": feedback,
+        "corrected":     corrected_text,
+        "feedback":      "",  # generándose en background — consultar /feedback_status/{doc_id}
         "errores_posibles": errores_posibles,
         "mensaje_errores": (
             "No se detectaron errores de 'tú' impersonal."
@@ -204,18 +222,21 @@ async def process_text(
             else f"Se detectaron {len(errores_posibles)} posibles usos del 'tú' impersonal."
         ),
         "metricas": {
-            "total_frases": total_frases,
-            "frases_con_tu_impersonal": total_errores,
-            "cambios_propuestos_modelo": cambios_modelo_total,
-            "cambios_realizados_usuario": cambios_modelo_total,
+            "total_frases":               total_frases,
+            "frases_con_tu_impersonal":   total_errores,
+            "cambios_propuestos_modelo":  cambios_modelo,
+            "cambios_realizados_usuario": cambios_modelo,
         },
     }
+
+
+# ── Métricas de documentos ─────────────────────────────────────────────────────
 
 @app.post("/documents/{doc_id}/metrics")
 def add_document_metric(
     doc_id: int,
-    name: str = Form(...),
-    value: float = Form(...),
+    name:   str   = Form(...),
+    value:  float = Form(...),
 ):
     try:
         insert_metric(doc_id, name, float(value))
@@ -225,7 +246,7 @@ def add_document_metric(
 
 @app.post("/documents/{doc_id}/user_changes")
 def update_user_changes(
-    doc_id: int,
+    doc_id:  int,
     changes: int = Form(...),
 ):
     try:
@@ -233,6 +254,9 @@ def update_user_changes(
         return {"ok": True, "document_id": doc_id, "metric_name": "cambios_realizados_usuario", "metric_value": float(changes)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Overview y actividad ───────────────────────────────────────────────────────
 
 @app.get("/users/{username}/overview")
 def user_overview(username: str):
@@ -256,3 +280,84 @@ def delete_doc(doc_id: int):
     if not ok:
         raise HTTPException(status_code=404, detail="Documento no encontrado.")
     return {"ok": True, "deleted_id": doc_id}
+
+
+@app.get("/feedback_status/{doc_id}")
+def feedback_status(doc_id: int):
+    """
+    Polling endpoint — el frontend consulta esto cada N segundos
+    hasta que status == 'done' o 'error'.
+    """
+    return model.get_feedback_status(doc_id)
+
+
+# ── Valoración global ──────────────────────────────────────────────────────────
+
+@app.get("/users/{username}/global_feedback")
+def global_feedback(username: str):
+    """
+    Genera una valoración global del progreso del estudiante bajo demanda.
+    Solo se llama cuando el usuario pulsa el botón en el frontend.
+    Usa las métricas ya calculadas (sin procesar documentos nuevos).
+    """
+    try:
+        username = sanitize_username(username)
+        uid = get_user_id(username)
+        if uid is None:
+            raise HTTPException(status_code=404, detail="Usuario no válido.")
+
+        if not model.MODEL_LOADED:
+            raise HTTPException(status_code=503, detail="El modelo aún no está cargado.")
+
+        ov = get_user_overview(username)
+
+        total_docs          = int(ov.get("docs", 0))
+        login_days          = int(ov.get("login_days", 0))
+        pct_tu              = float(ov.get("docs_with_tu_percent", 0.0))
+        pct_sin_cambios     = float(ov.get("docs_no_changes_percent", 0.0))
+        avg_session_seconds = float(ov.get("avg_session_seconds", 0.0))
+
+        if total_docs == 0:
+            return {
+                "feedback": "Aún no has procesado ningún documento. ¡Sube tu primer texto para recibir una valoración!",
+                "stats": {
+                    "total_docs": 0,
+                    "login_days": login_days,
+                    "pct_con_error": 0.0,
+                    "evolucion": "insuficiente",
+                },
+            }
+
+        feedback_text = model.generate_global_feedback(
+            total_docs=total_docs,
+            login_days=login_days,
+            pct_tu=pct_tu,
+            pct_sin_cambios=pct_sin_cambios,
+            avg_session_seconds=avg_session_seconds,
+        )
+
+        # Tendencia simple: si % documentos con 'tú' > 50% → empeora/estable,
+        # si < 30% → mejora, si hay pocos datos → insuficiente
+        if total_docs < 3:
+            evolucion = "insuficiente"
+        elif pct_tu < 30.0:
+            evolucion = "mejora"
+        elif pct_tu > 60.0:
+            evolucion = "empeora"
+        else:
+            evolucion = "estable"
+
+        return {
+            "feedback": feedback_text,
+            "stats": {
+                "total_docs":   total_docs,
+                "login_days":   login_days,
+                "pct_con_error": pct_tu,
+                "evolucion":    evolucion,
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
